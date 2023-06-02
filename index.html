@@ -2,12 +2,12 @@
 <html>
 <body>
   <button id="select-file">Select File</button>
+  
   <script>
-    const { ipcRenderer } = require('electron');
-
-    document.getElementById('select-file').addEventListener('click', () => {
-      ipcRenderer.send('open-file-dialog');
-    });
+  const { ipcRenderer } = require('electron')
+  document.getElementById("select-file").addEventListener("click", () => {
+    ipcRenderer.send('open-file-dialog')
+  });
   </script>
 </body>
 </html>
