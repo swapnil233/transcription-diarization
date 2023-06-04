@@ -11,6 +11,7 @@ import numpy as np
 import json
 import subprocess
 import glob
+import os
 
 # Change this to use different models (tiny.en, base.en, small.en, medium.en, large)
 model_name = "tiny.en"
@@ -18,26 +19,17 @@ model_name = "tiny.en"
 
 # Using ffmpeg to convert video to audio. Must have ffmpeg installed and in PATH.
 def video_to_audio():
-    """Convert the video file to audio with ffmpeg"""
-    video_files = glob.glob("*.mp4")
+    """Convert all video files to audio with ffmpeg"""
+    video_files = glob.glob("./videos/*.mp4")
 
-    if video_files:
-        # Only 1 video to audio conversion for now
-        video_file = video_files[0]
-        audio_file = video_file.split(".")[0] + ".wav"
+    for video_file in video_files:
+        audio_file = "./audios/" + os.path.basename(video_file).split(".")[0] + ".wav"
+        print(f"Converting {video_file} to {audio_file}...")
 
-        print("Found .mp4 file, converting to audio...")
-
+        # Audio files need to be 16kHz, 1 channel, 16-bit PCM for Whisper
         command = ["ffmpeg", "-i", video_file, "-ar", "16000", "-ac", "1", audio_file]
         subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-        print("Audio file created: " + audio_file)
-
-        return audio_file
-
-    else:
-        print("No .mp4 file found in the directory.")
-        return None
+        print(f"Successfully converted {video_file} to {audio_file}.")
 
 
 # Use GPU if available
@@ -109,49 +101,47 @@ def cluster_embeddings(embeddings, num_speakers):
     return labels
 
 
-def write_transcript_to_txt(segments, labels):
+def write_transcript_to_txt(segments, audio_file):
     """Write the transcriptions into a text file with speaker labels and timestamps"""
-    for i, segment in enumerate(segments):
-        segment["speaker"] = "SPEAKER " + str(labels[i] + 1)
+    transcript_file = (
+        "./transcriptions/" + os.path.basename(audio_file).split(".")[0] + ".txt"
+    )
 
     def time(secs):
         return datetime.timedelta(seconds=round(secs))
 
-    with open("transcript.txt", "w") as transcript_file:
-        for i, segment in enumerate(segments):
-            if i == 0 or segments[i - 1]["speaker"] != segment["speaker"]:
-                transcript_file.write(
-                    "\n" + segment["speaker"] + " " + str(time(segment["start"])) + "\n"
-                )
-            transcript_file.write(segment["text"][1:] + " ")
-    print("Transcription written to 'transcript.txt'.")
+    with open(transcript_file, "w") as f:
+        for segment in segments:
+            f.write("\nSPEAKER " + str(time(segment["start"])) + "\n")
+            f.write(segment["text"][1:] + " ")
+    print(f"Transcription written to '{transcript_file}'.")
 
 
-def write_transcript_to_json(segments, labels):
+def write_transcript_to_json(segments, audio_file):
     """Write the transcriptions into a json file with speaker labels and timestamps"""
-    for i, segment in enumerate(segments):
-        segment["speaker"] = "SPEAKER " + str(labels[i] + 1)
+    transcript_file = (
+        "./transcriptions/" + os.path.basename(audio_file).split(".")[0] + ".json"
+    )
 
     def time(secs):
         return str(datetime.timedelta(seconds=round(secs)))
 
     transcript = []
 
-    for i, segment in enumerate(segments):
-        if i == 0 or segments[i - 1]["speaker"] != segment["speaker"]:
+    for segment in segments:
+        if not transcript or transcript[-1]["text"][-1] == " ":
             timestamp = time(segment["start"])
-            speaker = segment["speaker"]
             text = segment["text"][1:] + " "
             transcript.append(
-                {"speaker": speaker, "timestamp": timestamp, "text": text}
+                {"speaker": "SPEAKER", "timestamp": timestamp, "text": text}
             )
         else:
             transcript[-1]["text"] += segment["text"][1:] + " "
 
-    with open("transcript.json", "w") as transcript_file:
-        json.dump(transcript, transcript_file, indent=4)
+    with open(transcript_file, "w") as f:
+        json.dump(transcript, f, indent=4)
 
-    print("Transcription written to 'transcript.json'.")
+    print(f"Transcription written to '{transcript_file}'.")
 
 
 def main():
@@ -159,28 +149,27 @@ def main():
     device = init_device()
     embedding_model, transcription_model = load_models(device, model_name)
 
-    audio_path = video_to_audio()
+    video_to_audio()
 
-    if audio_path is None:
-        print("No audio to process. Exiting...")
-        return
+    audio_files = glob.glob("./audios/*.wav")
 
-    segments = transcribe_audio(transcription_model, audio_path)
-    duration = get_audio_duration(audio_path)
+    for audio_file in audio_files:
+        segments = transcribe_audio(transcription_model, audio_file)
+        duration = get_audio_duration(audio_file)
 
-    embeddings = np.zeros(shape=(len(segments), 192))
-    for i, segment in enumerate(segments):
-        embeddings[i] = segment_embedding(
-            segment, duration, audio_path, embedding_model, device
-        )
+        embeddings = np.zeros(shape=(len(segments), 192))
+        for i, segment in enumerate(segments):
+            embeddings[i] = segment_embedding(
+                segment, duration, audio_file, embedding_model, device
+            )
 
-    embeddings = np.nan_to_num(embeddings)
+        embeddings = np.nan_to_num(embeddings)
 
-    num_speakers = int(input("Please enter the number of speakers: "))
-    labels = cluster_embeddings(embeddings, num_speakers)
+        num_speakers = 1  # we are not distinguishing between speakers
+        labels = cluster_embeddings(embeddings, num_speakers)
 
-    # write_transcript_to_txt(segments, labels)
-    write_transcript_to_json(segments, labels)
+        write_transcript_to_txt(segments, audio_file)
+        write_transcript_to_json(segments, audio_file)
 
 
 if __name__ == "__main__":
