@@ -37,22 +37,33 @@ ipcMain.on("open-file-dialog", (event) => {
     .then((result) => {
       if (!result.canceled) {
         console.log(result.filePaths[0]);
-        const videoPath = result.filePaths[0];
-        const audioPath = videoPath.split(".").slice(0, -1).join(".") + ".wav";
+        const videoPath = `"${result.filePaths[0]}"`; // Use the chosen file path
+        const audioPath = `"${result.filePaths[0].replace(
+          /\.[^/.]+$/,
+          ""
+        )}.wav"`; // Create audioPath based on videoPath
 
-        const ffmpeg = spawn("ffmpeg", [
-          "-y", // Add this line
-          "-i",
-          videoPath,
-          "-vn",
-          "-acodec",
-          "pcm_s16le",
-          "-ar",
-          "44100",
-          "-ac",
-          "2",
-          audioPath,
-        ]);
+        console.log("Spawning ffmpeg");
+
+        const ffmpeg = spawn(
+          "ffmpeg",
+          [
+            "-y",
+            "-i",
+            videoPath, // Use videoPath directly, without extra quotes
+            "-vn",
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            audioPath,
+          ],
+          { shell: true }
+        );
+
+        console.log("Spawned ffmpeg");
 
         ffmpeg.stdout.on("data", (data) => {
           console.log(`FFMPEG stdout: ${data.toString()}`);
