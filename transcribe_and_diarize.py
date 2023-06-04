@@ -12,6 +12,7 @@ import json
 import subprocess
 import glob
 import os
+import uuid
 
 # Change this to use different models (tiny.en, base.en, small.en, medium.en, large)
 model_name = "base.en"
@@ -66,7 +67,7 @@ def load_models(device, model_name):
 
 def transcribe_audio(model, audio_path):
     """Transcribe audio using the given model and audio path"""
-    print("Starting transcription...")
+    print(f"Starting transcription using Whisper's {model_name} model...")
 
     result = model.transcribe(audio_path)
 
@@ -142,10 +143,11 @@ def write_transcript_to_json(segments, audio_file):
 
     for segment in segments:
         if not transcript or transcript[-1]["text"][-1] == " ":
+            id = str(uuid.uuid4())
             timestamp = time(segment["start"])
             text = segment["text"][1:] + " "
             transcript.append(
-                {"speaker": "SPEAKER", "timestamp": timestamp, "text": text}
+                {"id": id, "speaker": "SPEAKER", "timestamp": timestamp, "text": text}
             )
         else:
             transcript[-1]["text"] += segment["text"][1:] + " "
