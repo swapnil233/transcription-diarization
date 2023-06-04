@@ -14,7 +14,7 @@ import glob
 import os
 
 # Change this to use different models (tiny.en, base.en, small.en, medium.en, large)
-model_name = "tiny.en"
+model_name = "base.en"
 
 
 # Using ffmpeg to convert video to audio. Must have ffmpeg installed and in PATH.
@@ -25,6 +25,9 @@ def video_to_audio():
     for video_file in video_files:
         audio_file = "./audios/" + os.path.basename(video_file).split(".")[0] + ".wav"
         print(f"Converting {video_file} to {audio_file}...")
+
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(audio_file), exist_ok=True)
 
         # Audio files need to be 16kHz, 1 channel, 16-bit PCM for Whisper
         command = ["ffmpeg", "-i", video_file, "-ar", "16000", "-ac", "1", audio_file]
@@ -63,7 +66,10 @@ def load_models(device, model_name):
 
 def transcribe_audio(model, audio_path):
     """Transcribe audio using the given model and audio path"""
+    print("Starting transcription...")
+
     result = model.transcribe(audio_path)
+
     print("Transcription completed.")
 
     return result["segments"]
@@ -76,6 +82,7 @@ def get_audio_duration(audio_path):
         rate = audio_file.getframerate()
         duration = frames / float(rate)
 
+    print(f"Audio duration: {duration} seconds.")
     return duration
 
 
@@ -88,7 +95,6 @@ def segment_embedding(segment, duration, audio_path, embedding_model, device):
     waveform, sample_rate = audio.crop(audio_path, clip)
 
     waveform = waveform.to(device)  # move data to GPU
-
     return embedding_model(waveform[None])
 
 
@@ -96,8 +102,8 @@ def cluster_embeddings(embeddings, num_speakers):
     """Cluster embeddings into groups representing different speakers"""
     clustering = AgglomerativeClustering(num_speakers).fit(embeddings)
     labels = clustering.labels_
-    print("Clustering completed.")
 
+    print(f"Clustering complete. Found {num_speakers} speakers.")
     return labels
 
 
@@ -106,6 +112,9 @@ def write_transcript_to_txt(segments, audio_file):
     transcript_file = (
         "./transcriptions/" + os.path.basename(audio_file).split(".")[0] + ".txt"
     )
+
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(transcript_file), exist_ok=True)
 
     def time(secs):
         return datetime.timedelta(seconds=round(secs))
@@ -122,6 +131,9 @@ def write_transcript_to_json(segments, audio_file):
     transcript_file = (
         "./transcriptions/" + os.path.basename(audio_file).split(".")[0] + ".json"
     )
+
+    # Create directory if it doesn't exist
+    os.makedirs(os.path.dirname(transcript_file), exist_ok=True)
 
     def time(secs):
         return str(datetime.timedelta(seconds=round(secs)))
@@ -158,6 +170,7 @@ def main():
         duration = get_audio_duration(audio_file)
 
         embeddings = np.zeros(shape=(len(segments), 192))
+        print("Generating embeddings...")
         for i, segment in enumerate(segments):
             embeddings[i] = segment_embedding(
                 segment, duration, audio_file, embedding_model, device
