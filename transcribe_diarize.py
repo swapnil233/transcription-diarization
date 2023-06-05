@@ -1,3 +1,4 @@
+import time
 import whisper
 import datetime
 import torch
@@ -160,6 +161,7 @@ def write_transcript_to_json(segments, audio_file):
 
 def main():
     """Main function to control flow of operations"""
+    start_time = time.time()
     device = init_device()
     embedding_model, transcription_model = load_models(device, model_name)
 
@@ -185,6 +187,11 @@ def main():
 
         write_transcript_to_txt(segments, audio_file)
         write_transcript_to_json(segments, audio_file)
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+
+    print(f"The process took {elapsed_time} seconds.")
 
 
 if __name__ == "__main__":
